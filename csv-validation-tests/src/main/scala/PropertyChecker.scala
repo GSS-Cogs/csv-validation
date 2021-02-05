@@ -3,8 +3,7 @@ import scala.collection.mutable
 import scala.util.matching.Regex
 import scala.collection.mutable.HashMap
 
-class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
-
+object PropertyChecker {
   val Bcp47Regular = "(art-lojban|cel-gaulish|no-bok|no-nyn|zh-guoyu|zh-hakka|zh-min|zh-min-nan|zh-xiang)"
   val Bcp47Irregular = "(en-GB-oed|i-ami|i-bnn|i-default|i-enochian|i-hak|i-klingon|i-lux|i-mingo|i-navajo|i-pwn|i-tao|i-tay|i-tsu|sgn-BE-FR|sgn-BE-NL|sgn-CH-DE)"
   val Bcp47Grandfathered = "(?<grandfathered>" + Bcp47Irregular + "|" + Bcp47Regular + ")"
@@ -19,6 +18,11 @@ class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
   val Bcp47Langtag = "(" + Bcp47Language + "(-" + Bcp47Script + ")?" + "(-" + Bcp47Region + ")?" + "(-" + Bcp47Variant + ")*" + "(-" + Bcp47Extension + ")*" + "(-" + Bcp47PrivateUse + ")?" + ")"
   val Bcp47LanguagetagRegExp: Regex = ("^(" + Bcp47Grandfathered + "|" + Bcp47Langtag + "|" + Bcp47PrivateUse + ")").r
 
+
+}
+
+class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
+
   val Properties = HashMap(
     // Context Properties
     "@language" -> languageProperty(PropertyType.Context),
@@ -26,6 +30,7 @@ class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
     // common properties
     "@id" -> linkProperty(PropertyType.Common),
     // Notes to implement - figure out how to handle different types of values
+    "notes" -> notesProperty(PropertyType.Common),
     "suppressOutput" -> booleanProperty(PropertyType.Common),
     "lang" -> languageProperty(PropertyType.Inherited),
   )
@@ -38,8 +43,35 @@ class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
 
 
 
-  def checkCommonPropertyValue() = {
-    // To be implemented
+  def  checkCommonPropertyValue(value: Any, baseUrl: String, lang: String):(Any, Any) = {
+    value match {
+      case s:HashMap[String, Any] => {
+        throw new NotImplementedError("to be implemented later")
+
+//        var warnings =
+//        for((p,v) <- s) {
+//          p match {
+//            case "@context"
+//              throw new MetadataError("common property has @context property")
+//            case "@list"
+//              th
+//          }
+//        }
+      }
+      case s:String => {
+        lang match {
+          case "und" => return (s, null)
+          case _ => {
+            val h = HashMap(
+              "@value" -> s, "@language" -> lang
+            )
+            return (h, null)
+          }
+        }
+      }
+      case s:Array[String] => throw new NotImplementedError("to be implemented later")
+      case _ => throw new IllegalArgumentException(s"Unexcepted input of type ${value.getClass}")
+    }
   }
 
   def booleanProperty(typeString:PropertyType.Value):(Boolean, Any, PropertyType.Value) = {
@@ -49,13 +81,16 @@ class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
     }
   }
 
-//  def notesProperty():(Object, String, String) = {
-//    if (value instanceof Array) {
-//      return ("false", "invalid_value", "common")
-//    }
-//
-//
-//  }
+  def notesProperty(typeString:PropertyType.Value):(Any, Any, PropertyType.Value) = {
+    value match {
+      case xs: Array[String] => {
+        val (values, warnings) = xs.map(x => checkCommonPropertyValue(x, baseUrl, lang))
+                                   .unzip
+        return (values, warnings, typeString)
+      }
+      case _ => return (false, "invalid_value", typeString)
+    }
+  }
 
   def linkProperty(typeString:PropertyType.Value):(String, Any, PropertyType.Value) = {
     var baseUrlCopy = ""
@@ -77,7 +112,7 @@ class PropertyChecker(property:String, value:Any, baseUrl:String, lang:String) {
 
   def languageProperty(typeString:PropertyType.Value):(String, Any, PropertyType.Value) = {
     return value match {
-      case s: String if Bcp47LanguagetagRegExp.pattern.matcher(s).matches => (s, "", typeString)
+      case s: String if PropertyChecker.Bcp47LanguagetagRegExp.pattern.matcher(s).matches => (s, "", typeString)
       case _ => ("", "invalid_value", typeString)
     }
   }
